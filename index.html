@@ -11,7 +11,8 @@
     #app { width: 100%; max-width: 420px; min-height: 100vh; position: relative; display: flex; flex-direction: column; background: #f1f5f9; }
     .header { background: #1e293b; color: white; padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
     .header h1 { font-size: 16px; font-weight: 700; }
-    .sync-dot { width: 8px; height: 8px; border-radius: 50%; background: #10b981; display: inline-block; }
+    .sync-dot { width: 8px; height: 8px; border-radius: 50%; background: #94a3b8; display: inline-block; transition: background 0.4s; }
+    .sync-dot.connected { background: #10b981; }
     .pages { flex: 1; overflow-y: auto; }
     .page { display: none; padding: 16px; padding-bottom: 80px; }
     .page.active { display: block; }
@@ -85,17 +86,24 @@
     .cal-total-prices { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
     .cal-total-after { font-size: 15px; color: #ff5722; }
     .cal-total-before { font-size: 11px; color: #94a3b8; font-weight: 400; }
+    .loading-screen { position: fixed; inset: 0; background: #1e293b; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 999; gap: 16px; }
+    .loading-screen.hidden { display: none; }
+    .loading-spinner { width: 36px; height: 36px; border: 3px solid rgba(255,255,255,0.2); border-top-color: #ff5722; border-radius: 50%; animation: spin 0.8s linear infinite; }
+    .loading-text { font-size: 14px; color: #94a3b8; font-family: 'Assistant', sans-serif; }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
+<div class="loading-screen" id="loadingScreen">
+  <div class="loading-spinner"></div>
+  <div class="loading-text">מתחבר...</div>
+</div>
 <div id="app">
   <div class="header">
     <h1 id="headerTitle">SmartInvoice</h1>
-    <span class="sync-dot"></span>
+    <span class="sync-dot" id="syncDot"></span>
   </div>
-
   <div class="pages">
-    <!-- HOME -->
     <div class="page active" id="page-home">
       <div class="card timer-card">
         <div class="client-label" id="activeClientDisplay">מוכן לעבודה</div>
@@ -105,17 +113,15 @@
       </div>
       <div class="card">
         <div class="cal-header">
-          <button class="cal-nav" onclick="calPrev()">›</button>
+          <button class="cal-nav" onclick="calPrev()">&#8250;</button>
           <span class="cal-month-label" id="calMonthLabel"></span>
-          <button class="cal-nav" onclick="calNext()">‹</button>
+          <button class="cal-nav" onclick="calNext()">&#8249;</button>
         </div>
         <div class="cal-grid" id="calDayNames"></div>
         <div class="cal-grid" id="calGrid"></div>
         <div class="cal-detail" id="calDetail"></div>
       </div>
     </div>
-
-    <!-- CLIENTS -->
     <div class="page" id="page-clients">
       <div class="section-header">
         <span class="section-title">לקוחות</span>
@@ -123,8 +129,6 @@
       </div>
       <div class="card" id="clientsContainer"><div class="empty-state">אין לקוחות עדיין</div></div>
     </div>
-
-    <!-- SETTINGS -->
     <div class="page" id="page-settings">
       <div class="section-title" style="margin-bottom:14px">הגדרות</div>
       <div class="card">
@@ -135,18 +139,15 @@
         <button class="btn btn-primary" onclick="saveSettings()">שמור הגדרות</button>
       </div>
       <div class="card" style="margin-top:0">
-        <button class="btn btn-danger" onclick="if(confirm('למחוק את כל הנתונים?')) clearAll()">מחק את כל הנתונים</button>
+        <button class="btn btn-danger" onclick="clearAll()">מחק את כל הנתונים</button>
       </div>
     </div>
   </div>
-
   <nav class="nav">
-    <div class="nav-item active" onclick="navigate('home',this)"><span class="nav-icon">⏱</span>עבודה</div>
-    <div class="nav-item" onclick="navigate('clients',this)"><span class="nav-icon">👥</span>לקוחות</div>
-    <div class="nav-item" onclick="navigate('settings',this)"><span class="nav-icon">⚙️</span>הגדרות</div>
+    <div class="nav-item active" onclick="navigate('home',this)"><span class="nav-icon">&#9201;</span>עבודה</div>
+    <div class="nav-item" onclick="navigate('clients',this)"><span class="nav-icon">&#128101;</span>לקוחות</div>
+    <div class="nav-item" onclick="navigate('settings',this)"><span class="nav-icon">&#9881;</span>הגדרות</div>
   </nav>
-
-  <!-- START SHEET -->
   <div class="overlay" id="startSheet">
     <div class="sheet">
       <div class="sheet-handle"></div>
@@ -154,29 +155,25 @@
       <div class="field-group"><div class="field-label">תאריך</div><input class="field-input" type="date" id="workDate" /></div>
       <div class="field-group"><div class="field-label">לקוח</div><select class="field-input" id="clientSelect"></select></div>
       <div class="field-group"><div class="field-label">תיאור עבודה (אופציונלי)</div><textarea class="field-input" id="workDesc" placeholder="תאר את העבודה בחופשיות..."></textarea></div>
-      <button class="btn btn-primary" onclick="startWork()">צא לדרך ▶</button>
+      <button class="btn btn-primary" onclick="startWork()">צא לדרך</button>
       <button class="btn btn-secondary" onclick="closeSheet('startSheet')">ביטול</button>
     </div>
   </div>
-
-  <!-- END SHEET -->
   <div class="overlay" id="endSheet">
     <div class="sheet">
       <div class="sheet-handle"></div>
       <div class="sheet-title">סיכום עבודה</div>
       <div id="endSummary"></div>
-      <div class="field-group"><div class="field-label">מחיר לפני מע"מ (₪)</div><input class="field-input" type="number" id="workPrice" placeholder="0.00" oninput="updateTotal()" /></div>
+      <div class="field-group"><div class="field-label">מחיר לפני מע"מ (&#8362;)</div><input class="field-input" type="number" id="workPrice" placeholder="0.00" oninput="updateTotal()" /></div>
       <div class="price-breakdown">
-        <div class="price-row"><span class="price-label">לפני מע"מ</span><span class="price-val" id="preVatDisplay">0.00 ₪</span></div>
-        <div class="price-row"><span class="price-label" id="vatLabel">מע"מ 18%</span><span class="price-val" id="vatAmountDisplay">0.00 ₪</span></div>
-        <div class="price-row total-row"><span class="price-label">אחרי מע"מ</span><span class="price-val orange" id="totalDisplay">0.00 ₪</span></div>
+        <div class="price-row"><span class="price-label">לפני מע"מ</span><span class="price-val" id="preVatDisplay">0.00 &#8362;</span></div>
+        <div class="price-row"><span class="price-label" id="vatLabel">מע"מ 18%</span><span class="price-val" id="vatAmountDisplay">0.00 &#8362;</span></div>
+        <div class="price-row total-row"><span class="price-label">אחרי מע"מ</span><span class="price-val orange" id="totalDisplay">0.00 &#8362;</span></div>
       </div>
-      <button class="btn btn-primary" onclick="finishWork()">שלח דיווח ✓</button>
+      <button class="btn btn-primary" onclick="finishWork()">שלח דיווח</button>
       <button class="btn btn-secondary" onclick="closeSheet('endSheet')">המשך עבודה</button>
     </div>
   </div>
-
-  <!-- ADD CLIENT SHEET -->
   <div class="overlay" id="addClientSheet">
     <div class="sheet">
       <div class="sheet-handle"></div>
@@ -188,65 +185,121 @@
     </div>
   </div>
 </div>
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+  import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+  import { getFirestore, doc, setDoc, getDoc, collection, onSnapshot, addDoc, deleteDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyD_6mBiDvARr_IO9RvzEDIOV7MSEozEayc",
+    authDomain: "micaelbar-936d7.firebaseapp.com",
+    projectId: "micaelbar-936d7",
+    storageBucket: "micaelbar-936d7.firebasestorage.app",
+    messagingSenderId: "1063502396395",
+    appId: "1:1063502396395:web:3dfab001cbb600bf9b77ae"
+  };
+
+  const fbApp = initializeApp(firebaseConfig);
+  const auth = getAuth(fbApp);
+  const db = getFirestore(fbApp);
+
+  let uid = null;
   let state = { clients: [], history: [], settings: {}, timer: null, startTime: null, activeClient: '', activeDesc: '', activeDate: '' };
   let calYear, calMonth, calSelected = null;
   const HE_MONTHS = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
   const HE_DAYS = ['א','ב','ג','ד','ה','ו','ש'];
 
-  function load() {
-    try {
-      state.clients = JSON.parse(localStorage.getItem('si_clients') || '[]');
-      state.history = JSON.parse(localStorage.getItem('si_history') || '[]');
-      state.settings = JSON.parse(localStorage.getItem('si_settings') || '{}');
-    } catch(e) {}
-    const now = new Date();
-    calYear = now.getFullYear(); calMonth = now.getMonth();
-    applySettings(); refreshClients(); renderCalendar();
-  }
+  const userDoc = () => doc(db, 'smartinvoice', uid);
+  const col = (name) => collection(db, 'smartinvoice', uid, name);
+  const docAt = (c, id) => doc(db, 'smartinvoice', uid, c, String(id));
+  const setSynced = (on) => document.getElementById('syncDot').classList.toggle('connected', on);
 
-  function save() {
-    localStorage.setItem('si_clients', JSON.stringify(state.clients));
-    localStorage.setItem('si_history', JSON.stringify(state.history));
-    localStorage.setItem('si_settings', JSON.stringify(state.settings));
+  onAuthStateChanged(auth, async (user) => {
+    if (user) {
+      uid = user.uid;
+      setSynced(true);
+      const now = new Date();
+      calYear = now.getFullYear(); calMonth = now.getMonth();
+      await loadSettings();
+      startListeners();
+      document.getElementById('loadingScreen').classList.add('hidden');
+    } else {
+      setSynced(false);
+      signInAnonymously(auth);
+    }
+  });
+
+  async function loadSettings() {
+    try { const s = await getDoc(userDoc()); if (s.exists()) state.settings = s.data(); } catch(e) {}
+    applySettings();
   }
 
   function applySettings() {
     document.getElementById('bizName').value = state.settings.bizName || 'SmartInvoice';
     document.getElementById('vatRate').value = state.settings.vatRate || '18';
     document.getElementById('tgToken').value = state.settings.tgToken || '';
-    document.getElementById('tgChat').value = state.settings.tgChat || '';
+    document.getElementById('tgChat').value  = state.settings.tgChat  || '';
     document.getElementById('headerTitle').textContent = state.settings.bizName || 'SmartInvoice';
   }
 
-  function saveSettings() {
+  window.saveSettings = async () => {
     state.settings.bizName = document.getElementById('bizName').value || 'SmartInvoice';
     state.settings.vatRate = document.getElementById('vatRate').value || '18';
     state.settings.tgToken = document.getElementById('tgToken').value;
-    state.settings.tgChat = document.getElementById('tgChat').value;
-    save(); applySettings(); alert('הגדרות נשמרו!');
+    state.settings.tgChat  = document.getElementById('tgChat').value;
+    await setDoc(userDoc(), state.settings);
+    applySettings(); alert('הגדרות נשמרו!');
+  };
+
+  function startListeners() {
+    onSnapshot(col('clients'), snap => {
+      state.clients = snap.docs.map(d => ({ fsId: d.id, ...d.data() }));
+      refreshClients();
+    });
+    onSnapshot(col('history'), snap => {
+      state.history = snap.docs.map(d => ({ fsId: d.id, ...d.data() }));
+      state.history.sort((a, b) => b.id - a.id);
+      renderCalendar();
+    });
   }
 
-  function navigate(page, el) {
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-    document.getElementById('page-' + page).classList.add('active');
-    if (el) el.classList.add('active');
+  window.openAddClientSheet = () => {
+    document.getElementById('newClientName').value = '';
+    document.getElementById('newClientPhone').value = '';
+    document.getElementById('addClientSheet').classList.add('open');
+  };
+
+  window.addClient = async () => {
+    const name = document.getElementById('newClientName').value.trim();
+    if (!name) { alert('הכנס שם לקוח'); return; }
+    const phone = document.getElementById('newClientPhone').value.trim();
+    await addDoc(col('clients'), { id: Date.now(), name, phone });
+    closeSheet('addClientSheet');
+  };
+
+  window.deleteClient = async (fsId) => {
+    if (!confirm('למחוק לקוח?')) return;
+    await deleteDoc(docAt('clients', fsId));
+  };
+
+  function refreshClients() {
+    const el = document.getElementById('clientsContainer');
+    if (!state.clients.length) { el.innerHTML = '<div class="empty-state">אין לקוחות עדיין</div>'; return; }
+    el.innerHTML = state.clients.map(c =>
+      '<div class="client-row"><div><div class="client-name">'+esc(c.name)+'</div>'+(c.phone?'<div class="client-meta">'+esc(c.phone)+'</div>':'')+'</div><button class="del-btn" onclick="deleteClient(\''+c.fsId+'\')">&#10005;</button></div>'
+    ).join('');
   }
 
-  function openStartSheet() {
+  window.openStartSheet = () => {
     const sel = document.getElementById('clientSelect');
     sel.innerHTML = '<option value="">-- בחר לקוח --</option>';
-    state.clients.forEach(c => sel.innerHTML += `<option value="${c.name}">${c.name}</option>`);
+    state.clients.forEach(c => sel.innerHTML += '<option value="'+c.name+'">'+c.name+'</option>');
     document.getElementById('workDate').valueAsDate = new Date();
     document.getElementById('workDesc').value = '';
     document.getElementById('startSheet').classList.add('open');
-  }
+  };
 
-  function closeSheet(id) { document.getElementById(id).classList.remove('open'); }
-
-  function startWork() {
+  window.startWork = () => {
     const client = document.getElementById('clientSelect').value;
     if (!client) { alert('בחר לקוח'); return; }
     state.activeClient = client;
@@ -256,62 +309,48 @@
     closeSheet('startSheet');
     document.getElementById('startBtn').style.display = 'none';
     document.getElementById('stopBtn').style.display = 'block';
-    const shortDesc = state.activeDesc.length > 40 ? state.activeDesc.substr(0,40) + '…' : state.activeDesc;
-    document.getElementById('activeClientDisplay').textContent = client + (shortDesc ? ' – ' + shortDesc : '');
+    const shortDesc = state.activeDesc.length > 40 ? state.activeDesc.substr(0,40)+'...' : state.activeDesc;
+    document.getElementById('activeClientDisplay').textContent = client + (shortDesc ? ' - '+shortDesc : '');
     document.getElementById('timerDisplay').classList.add('running');
     state.timer = setInterval(() => {
       const diff = new Date(new Date() - state.startTime);
       document.getElementById('timerDisplay').textContent = diff.toISOString().substr(11, 8);
     }, 1000);
-  }
+  };
 
-  function openEndSheet() {
+  window.openEndSheet = () => {
     const vatPct = parseFloat(state.settings.vatRate || 18);
     document.getElementById('workPrice').value = '';
     document.getElementById('vatLabel').textContent = 'מע"מ ' + vatPct + '%';
-    document.getElementById('preVatDisplay').textContent = '0.00 ₪';
-    document.getElementById('vatAmountDisplay').textContent = '0.00 ₪';
-    document.getElementById('totalDisplay').textContent = '0.00 ₪';
+    ['preVatDisplay','vatAmountDisplay','totalDisplay'].forEach(id => document.getElementById(id).textContent = '0.00 \u20AA');
     const dur = document.getElementById('timerDisplay').textContent;
     const elapsed = state.startTime ? ((new Date() - state.startTime) / 3600000).toFixed(2) : 0;
-    document.getElementById('endSummary').innerHTML = `
-      <div class="card" style="margin-bottom:12px;padding:10px 12px">
-        <div class="summary-row"><span style="color:#64748b">לקוח</span><span style="font-weight:600">${esc(state.activeClient)}</span></div>
-        <div class="summary-row"><span style="color:#64748b">זמן</span><span>${dur} (${elapsed} שע')</span></div>
-        ${state.activeDesc ? `<div style="border-top:1px solid #f1f5f9;margin-top:4px;padding-top:6px"><div style="font-size:11px;color:#64748b;margin-bottom:3px">תיאור</div><div class="summary-desc">${esc(state.activeDesc)}</div></div>` : ''}
-      </div>`;
+    document.getElementById('endSummary').innerHTML =
+      '<div class="card" style="margin-bottom:12px;padding:10px 12px">'+
+      '<div class="summary-row"><span style="color:#64748b">לקוח</span><span style="font-weight:600">'+esc(state.activeClient)+'</span></div>'+
+      '<div class="summary-row"><span style="color:#64748b">זמן</span><span>'+dur+' ('+elapsed+' שע\')</span></div>'+
+      (state.activeDesc ? '<div style="border-top:1px solid #f1f5f9;margin-top:4px;padding-top:6px"><div style="font-size:11px;color:#64748b;margin-bottom:3px">תיאור</div><div class="summary-desc">'+esc(state.activeDesc)+'</div></div>' : '')+
+      '</div>';
     document.getElementById('endSheet').classList.add('open');
-  }
+  };
 
-  function updateTotal() {
+  window.updateTotal = () => {
     const price = parseFloat(document.getElementById('workPrice').value) || 0;
     const vatPct = parseFloat(state.settings.vatRate || 18);
     const vatAmount = price * vatPct / 100;
-    const total = price + vatAmount;
-    document.getElementById('preVatDisplay').textContent = price.toFixed(2) + ' ₪';
-    document.getElementById('vatAmountDisplay').textContent = vatAmount.toFixed(2) + ' ₪';
-    document.getElementById('totalDisplay').textContent = total.toFixed(2) + ' ₪';
-  }
+    document.getElementById('preVatDisplay').textContent = price.toFixed(2) + ' \u20AA';
+    document.getElementById('vatAmountDisplay').textContent = vatAmount.toFixed(2) + ' \u20AA';
+    document.getElementById('totalDisplay').textContent = (price + vatAmount).toFixed(2) + ' \u20AA';
+  };
 
-  function finishWork() {
+  window.finishWork = async () => {
     const price = parseFloat(document.getElementById('workPrice').value) || 0;
     const vatPct = parseFloat(state.settings.vatRate || 18);
     const vatAmount = price * vatPct / 100;
     const total = price + vatAmount;
     const dur = document.getElementById('timerDisplay').textContent;
-    const entry = {
-      id: Date.now(),
-      client: state.activeClient,
-      desc: state.activeDesc,
-      date: state.activeDate,
-      duration: dur,
-      price: price.toFixed(2),
-      vatAmount: vatAmount.toFixed(2),
-      total: total.toFixed(2),
-      vat: vatPct
-    };
-    state.history.unshift(entry);
-    save();
+    const entry = { id: Date.now(), client: state.activeClient, desc: state.activeDesc, date: state.activeDate, duration: dur, price: price.toFixed(2), vatAmount: vatAmount.toFixed(2), total: total.toFixed(2), vat: vatPct };
+    await addDoc(col('history'), entry);
     clearInterval(state.timer); state.timer = null; state.startTime = null;
     document.getElementById('timerDisplay').textContent = '00:00:00';
     document.getElementById('timerDisplay').classList.remove('running');
@@ -319,73 +358,33 @@
     document.getElementById('startBtn').style.display = 'block';
     document.getElementById('stopBtn').style.display = 'none';
     closeSheet('endSheet');
-    renderCalendar();
     sendTelegram(entry);
-    alert('דווח בהצלחה! ✓');
-  }
+    alert('דווח בהצלחה!');
+  };
 
-  function deleteEntry(id) {
+  window.deleteEntry = async (fsId) => {
     if (!confirm('למחוק רשומה זו?')) return;
-    state.history = state.history.filter(h => h.id !== id);
-    save(); renderCalendar();
-  }
+    await deleteDoc(docAt('history', fsId));
+  };
 
   function sendTelegram(entry) {
     const token = state.settings.tgToken, chat = state.settings.tgChat;
     if (!token || !chat) return;
     const bizName = state.settings.bizName || 'SmartInvoice';
-    const msg =
-`✅ דיווח עבודה חדש — ${bizName}
-━━━━━━━━━━━━━━
-👤 לקוח: ${entry.client}
-📅 תאריך: ${entry.date}
-⏱ זמן עבודה: ${entry.duration}
-${entry.desc ? '📋 תיאור: ' + entry.desc + '\n' : ''}━━━━━━━━━━━━━━
-💵 לפני מע"מ:   ${entry.price} ₪
-🧾 מע"מ ${entry.vat}%:      ${entry.vatAmount} ₪
-💰 אחרי מע"מ:   ${entry.total} ₪
-━━━━━━━━━━━━━━`;
-    fetch(`https://api.telegram.org/bot${token}/sendMessage?chat_id=${chat}&text=${encodeURIComponent(msg)}`).catch(()=>{});
+    const msg = '✅ דיווח עבודה חדש — ' + bizName + '\n━━━━━━━━━━━━━━\n👤 לקוח: ' + entry.client + '\n📅 תאריך: ' + entry.date + '\n⏱ זמן: ' + entry.duration + '\n' + (entry.desc ? '📋 תיאור: ' + entry.desc + '\n' : '') + '━━━━━━━━━━━━━━\n💵 לפני מע"מ: ' + entry.price + ' ₪\n🧾 מע"מ ' + entry.vat + '%: ' + entry.vatAmount + ' ₪\n💰 אחרי מע"מ: ' + entry.total + ' ₪\n━━━━━━━━━━━━━━';
+    fetch('https://api.telegram.org/bot' + token + '/sendMessage?chat_id=' + chat + '&text=' + encodeURIComponent(msg)).catch(() => {});
   }
 
-  function openAddClientSheet() {
-    document.getElementById('newClientName').value = '';
-    document.getElementById('newClientPhone').value = '';
-    document.getElementById('addClientSheet').classList.add('open');
-  }
-
-  function addClient() {
-    const name = document.getElementById('newClientName').value.trim();
-    if (!name) { alert('הכנס שם לקוח'); return; }
-    state.clients.push({ id: Date.now(), name, phone: document.getElementById('newClientPhone').value.trim() });
-    save(); refreshClients(); closeSheet('addClientSheet');
-  }
-
-  function deleteClient(id) {
-    if (!confirm('למחוק לקוח?')) return;
-    state.clients = state.clients.filter(c => c.id !== id);
-    save(); refreshClients();
-  }
-
-  function refreshClients() {
-    const el = document.getElementById('clientsContainer');
-    if (!state.clients.length) { el.innerHTML = '<div class="empty-state">אין לקוחות עדיין</div>'; return; }
-    el.innerHTML = state.clients.map(c => `
-      <div class="client-row">
-        <div><div class="client-name">${esc(c.name)}</div>${c.phone ? `<div class="client-meta">${esc(c.phone)}</div>` : ''}</div>
-        <button class="del-btn" onclick="deleteClient(${c.id})">✕</button>
-      </div>`).join('');
-  }
-
-  function calPrev() { calMonth--; if (calMonth < 0) { calMonth = 11; calYear--; } calSelected = null; renderCalendar(); }
-  function calNext() { calMonth++; if (calMonth > 11) { calMonth = 0; calYear++; } calSelected = null; renderCalendar(); }
+  window.calPrev = () => { calMonth--; if (calMonth < 0) { calMonth = 11; calYear--; } calSelected = null; renderCalendar(); };
+  window.calNext = () => { calMonth++; if (calMonth > 11) { calMonth = 0; calYear++; } calSelected = null; renderCalendar(); };
+  window.selectCalDay = (dateKey) => { calSelected = calSelected === dateKey ? null : dateKey; renderCalendar(); };
 
   function workDaysInMonth() {
     const map = {};
     state.history.forEach(h => {
       if (!h.date) return;
-      const [y, m] = h.date.split('-').map(Number);
-      if (y === calYear && m - 1 === calMonth) {
+      const parts = h.date.split('-').map(Number);
+      if (parts[0] === calYear && parts[1] - 1 === calMonth) {
         if (!map[h.date]) map[h.date] = [];
         map[h.date].push(h);
       }
@@ -395,27 +394,22 @@ ${entry.desc ? '📋 תיאור: ' + entry.desc + '\n' : ''}━━━━━━�
 
   function renderCalendar() {
     document.getElementById('calMonthLabel').textContent = HE_MONTHS[calMonth] + ' ' + calYear;
-    document.getElementById('calDayNames').innerHTML = HE_DAYS.map(d => `<div class="cal-day-name">${d}</div>`).join('');
+    document.getElementById('calDayNames').innerHTML = HE_DAYS.map(d => '<div class="cal-day-name">'+d+'</div>').join('');
     const workMap = workDaysInMonth();
     const firstDay = new Date(calYear, calMonth, 1).getDay();
     const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
     const today = new Date();
     const todayKey = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
     let html = '';
-    for (let i = 0; i < firstDay; i++) html += `<div class="cal-day empty"></div>`;
+    for (let i = 0; i < firstDay; i++) html += '<div class="cal-day empty"></div>';
     for (let d = 1; d <= daysInMonth; d++) {
       const dateKey = calYear + '-' + String(calMonth+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
       const hasWork = !!workMap[dateKey];
       const cls = ['cal-day', hasWork?'has-work':'', dateKey===todayKey?'today':'', dateKey===calSelected?'selected':''].filter(Boolean).join(' ');
-      html += `<div class="${cls}" onclick="selectCalDay('${dateKey}')">${d}${hasWork?'<div class="cal-dot"></div>':''}</div>`;
+      html += '<div class="'+cls+'" onclick="selectCalDay(\''+dateKey+'\')">'+d+(hasWork?'<div class="cal-dot"></div>':'')+'</div>';
     }
     document.getElementById('calGrid').innerHTML = html;
     renderCalDetail(workMap);
-  }
-
-  function selectCalDay(dateKey) {
-    calSelected = calSelected === dateKey ? null : dateKey;
-    renderCalendar();
   }
 
   function renderCalDetail(workMap) {
@@ -424,43 +418,31 @@ ${entry.desc ? '📋 תיאור: ' + entry.desc + '\n' : ''}━━━━━━�
     const entries = workMap[calSelected];
     const totalBefore = entries.reduce((s,e) => s + parseFloat(e.price||0), 0);
     const totalAfter  = entries.reduce((s,e) => s + parseFloat(e.total||0), 0);
-    el.innerHTML =
-      `<div style="font-size:12px;font-weight:700;color:#64748b;margin-bottom:6px;padding-top:10px;border-top:1px solid #f1f5f9">${calSelected}</div>` +
-      entries.map(e => `
-        <div class="cal-detail-entry">
-          <div class="cal-detail-top">
-            <div style="flex:1;min-width:0">
-              <div class="cal-detail-client">${esc(e.client)}</div>
-              <div class="cal-detail-meta">${e.duration}</div>
-            </div>
-            <div class="cal-detail-prices">
-              <span class="cal-price-after">${e.total} ₪</span>
-              <span class="cal-price-before">לפני מע"מ: ${e.price} ₪</span>
-            </div>
-            <button class="cal-detail-del" onclick="deleteEntry(${e.id})">✕</button>
-          </div>
-          ${e.desc ? `<div class="cal-detail-desc">${esc(e.desc)}</div>` : ''}
-        </div>`).join('') +
-      (entries.length > 1 ? `
-        <div class="cal-total-row">
-          <span>סה"כ יום</span>
-          <div class="cal-total-prices">
-            <span class="cal-total-after">${totalAfter.toFixed(2)} ₪</span>
-            <span class="cal-total-before">לפני מע"מ: ${totalBefore.toFixed(2)} ₪</span>
-          </div>
-        </div>` : '');
+    let html = '<div style="font-size:12px;font-weight:700;color:#64748b;margin-bottom:6px;padding-top:10px;border-top:1px solid #f1f5f9">'+calSelected+'</div>';
+    entries.forEach(e => {
+      html += '<div class="cal-detail-entry"><div class="cal-detail-top"><div style="flex:1;min-width:0"><div class="cal-detail-client">'+esc(e.client)+'</div><div class="cal-detail-meta">'+e.duration+'</div></div><div class="cal-detail-prices"><span class="cal-price-after">'+e.total+' \u20AA</span><span class="cal-price-before">לפני מע"מ: '+e.price+' \u20AA</span></div><button class="cal-detail-del" onclick="deleteEntry(\''+e.fsId+'\')">&#10005;</button></div>'+(e.desc?'<div class="cal-detail-desc">'+esc(e.desc)+'</div>':'')+'</div>';
+    });
+    if (entries.length > 1) html += '<div class="cal-total-row"><span>סה"כ יום</span><div class="cal-total-prices"><span class="cal-total-after">'+totalAfter.toFixed(2)+' \u20AA</span><span class="cal-total-before">לפני מע"מ: '+totalBefore.toFixed(2)+' \u20AA</span></div></div>';
+    el.innerHTML = html;
   }
 
   function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-  function clearAll() {
-    localStorage.removeItem('si_clients');
-    localStorage.removeItem('si_history');
-    localStorage.removeItem('si_settings');
-    location.reload();
-  }
+  window.navigate = (page, el) => {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.getElementById('page-' + page).classList.add('active');
+    if (el) el.classList.add('active');
+  };
 
-  load();
+  window.closeSheet = (id) => document.getElementById(id).classList.remove('open');
+
+  window.clearAll = async () => {
+    if (!confirm('למחוק את כל הנתונים?')) return;
+    const [hSnap, cSnap] = await Promise.all([getDocs(col('history')), getDocs(col('clients'))]);
+    await Promise.all([...hSnap.docs.map(d => deleteDoc(d.ref)), ...cSnap.docs.map(d => deleteDoc(d.ref)), deleteDoc(userDoc())]);
+    location.reload();
+  };
 </script>
 </body>
 </html>
