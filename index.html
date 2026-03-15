@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>SmartInvoice</title>
+  <link href="https://fonts.googleapis.com/css2?family=Assistant:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Assistant', sans-serif; direction: rtl; background: #f1f5f9; color: #1e293b; min-height: 100vh; display: flex; justify-content: center; }
+    #app { width: 100%; max-width: 420px; min-height: 100vh; position: relative; display: flex; flex-direction: column; background: #f1f5f9; }
+    .header { background: #1e293b; color: white; padding: 14px 18px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+    .header h1 { font-size: 16px; font-weight: 700; }
+    .sync-dot { width: 8px; height: 8px; border-radius: 50%; background: #10b981; display: inline-block; }
+    .pages { flex: 1; overflow-y: auto; }
+    .page { display: none; padding: 16px; padding-bottom: 80px; }
+    .page.active { display: block; }
+    .card { background: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 16px; margin-bottom: 12px; }
+    .timer-card { text-align: center; padding: 24px 16px 20px; }
+    .client-label { font-size: 13px; color: #64748b; margin-bottom: 4px; min-height: 18px; }
+    .timer-display { font-size: 48px; font-weight: 300; letter-spacing: 2px; color: #1e293b; font-variant-numeric: tabular-nums; margin: 6px 0 18px; }
+    .timer-display.running { color: #ff5722; }
+    .btn { width: 100%; padding: 12px; border-radius: 10px; font-family: 'Assistant', sans-serif; font-size: 15px; font-weight: 600; cursor: pointer; border: none; transition: transform 0.15s, opacity 0.15s; }
+    .btn:active { transform: scale(0.97); opacity: 0.88; }
+    .btn-primary { background: #ff5722; color: white; }
+    .btn-secondary { background: #f1f5f9; color: #1e293b; border: 1px solid #e2e8f0; margin-top: 8px; }
+    .btn-danger { background: #fee2e2; color: #991b1b; }
+    .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .section-title { font-size: 15px; font-weight: 700; color: #1e293b; }
+    .add-btn { font-size: 13px; color: #ff5722; font-weight: 600; background: none; border: none; cursor: pointer; font-family: 'Assistant', sans-serif; }
+    .client-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #f1f5f9; }
+    .client-row:last-child { border-bottom: none; }
+    .client-name { font-size: 14px; font-weight: 600; }
+    .client-meta { font-size: 11px; color: #64748b; }
+    .del-btn { color: #ef4444; background: none; border: none; cursor: pointer; font-size: 17px; padding: 4px 8px; flex-shrink: 0; }
+    .field-group { margin-bottom: 12px; }
+    .field-label { font-size: 12px; color: #64748b; margin-bottom: 4px; }
+    .field-input { width: 100%; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-family: 'Assistant', sans-serif; font-size: 14px; background: white; color: #1e293b; direction: rtl; }
+    .field-input:focus { outline: none; border-color: #ff5722; }
+    textarea.field-input { resize: vertical; min-height: 72px; line-height: 1.5; }
+    select.field-input { appearance: none; }
+    .overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; align-items: flex-end; justify-content: center; }
+    .overlay.open { display: flex; }
+    .sheet { background: white; border-radius: 16px 16px 0 0; padding: 18px 18px 36px; width: 100%; max-width: 420px; max-height: 90vh; overflow-y: auto; }
+    .sheet-handle { width: 36px; height: 4px; background: #cbd5e1; border-radius: 2px; margin: 0 auto 16px; }
+    .sheet-title { font-size: 16px; font-weight: 700; margin-bottom: 16px; color: #1e293b; }
+    .nav { position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 420px; background: white; border-top: 1px solid #e2e8f0; display: flex; }
+    .nav-item { flex: 1; text-align: center; padding: 10px 0 12px; cursor: pointer; font-size: 10px; color: #94a3b8; font-family: 'Assistant', sans-serif; font-weight: 600; }
+    .nav-item.active { color: #ff5722; }
+    .nav-icon { font-size: 18px; display: block; margin-bottom: 2px; line-height: 1; }
+    .empty-state { text-align: center; padding: 30px 20px; color: #94a3b8; font-size: 13px; }
+    .summary-row { display: flex; justify-content: space-between; padding: 5px 0; font-size: 13px; }
+    .summary-desc { font-size: 12px; color: #64748b; white-space: pre-wrap; word-break: break-word; line-height: 1.45; padding: 5px 0; }
+    .price-breakdown { background: #f8fafc; border-radius: 10px; padding: 12px 14px; margin: 10px 0 14px; }
+    .price-row { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; font-size: 14px; }
+    .price-row.total-row { border-top: 1px solid #e2e8f0; margin-top: 6px; padding-top: 8px; font-weight: 700; font-size: 16px; }
+    .price-label { color: #64748b; }
+    .price-val { font-weight: 600; color: #1e293b; }
+    .price-val.orange { color: #ff5722; }
+    .cal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+    .cal-nav { background: none; border: none; cursor: pointer; font-size: 18px; color: #94a3b8; padding: 4px 8px; }
+    .cal-month-label { font-size: 14px; font-weight: 700; color: #1e293b; }
+    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+    .cal-day-name { text-align: center; font-size: 10px; color: #94a3b8; font-weight: 600; padding: 4px 0; }
+    .cal-day { aspect-ratio: 1/1; display: flex; flex-direction: column; align-items: center; justify-content: center; border-radius: 8px; font-size: 11px; cursor: pointer; position: relative; color: #1e293b; transition: background 0.15s; }
+    .cal-day:hover { background: #f1f5f9; }
+    .cal-day.empty { cursor: default; }
+    .cal-day.has-work { background: #fff3ef; color: #9a3412; font-weight: 700; }
+    .cal-day.today { border: 1.5px solid #ff5722; }
+    .cal-day.selected { background: #ff5722; color: white; }
+    .cal-dot { width: 4px; height: 4px; border-radius: 50%; background: #ff5722; position: absolute; bottom: 3px; }
+    .cal-day.selected .cal-dot { background: white; }
+    .cal-detail { margin-top: 10px; }
+    .cal-detail-entry { padding: 10px 0; border-bottom: 1px solid #f1f5f9; }
+    .cal-detail-entry:last-child { border-bottom: none; }
+    .cal-detail-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 6px; }
+    .cal-detail-client { font-size: 13px; font-weight: 600; }
+    .cal-detail-meta { font-size: 11px; color: #64748b; margin-top: 2px; }
+    .cal-detail-desc { font-size: 12px; color: #64748b; margin-top: 4px; white-space: pre-wrap; word-break: break-word; line-height: 1.45; }
+    .cal-detail-prices { display: flex; flex-direction: column; align-items: flex-end; flex-shrink: 0; gap: 2px; }
+    .cal-price-after { font-size: 14px; font-weight: 700; color: #ff5722; }
+    .cal-price-before { font-size: 11px; color: #94a3b8; }
+    .cal-detail-del { background: none; border: none; cursor: pointer; color: #ef4444; font-size: 15px; padding: 2px 0 2px 4px; flex-shrink: 0; line-height: 1; align-self: flex-start; }
+    .cal-total-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0 2px; font-weight: 700; font-size: 14px; }
+    .cal-total-prices { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+    .cal-total-after { font-size: 15px; color: #ff5722; }
+    .cal-total-before { font-size: 11px; color: #94a3b8; font-weight: 400; }
+  </style>
+</head>
+<body>
+<div id="app">
+  <div class="header">
+    <h1 id="headerTitle">SmartInvoice</h1>
+    <span class="sync-dot"></span>
+  </div>
+
+  <div class="pages">
+    <!-- HOME -->
+    <div class="page active" id="page-home">
+      <div class="card timer-card">
+        <div class="client-label" id="activeClientDisplay">מוכן לעבודה</div>
+        <div class="timer-display" id="timerDisplay">00:00:00</div>
+        <button class="btn btn-primary" id="startBtn" onclick="openStartSheet()">התחל עבודה</button>
+        <button class="btn btn-secondary" id="stopBtn" onclick="openEndSheet()" style="display:none">סיום ודיווח</button>
+      </div>
+      <div class="card">
+        <div class="cal-header">
+          <button class="cal-nav" onclick="calPrev()">›</button>
+          <span class="cal-month-label" id="calMonthLabel"></span>
+          <button class="cal-nav" onclick="calNext()">‹</button>
+        </div>
+        <div class="cal-grid" id="calDayNames"></div>
+        <div class="cal-grid" id="calGrid"></div>
+        <div class="cal-detail" id="calDetail"></div>
+      </div>
+    </div>
+
+    <!-- CLIENTS -->
+    <div class="page" id="page-clients">
+      <div class="section-header">
+        <span class="section-title">לקוחות</span>
+        <button class="add-btn" onclick="openAddClientSheet()">+ הוסף לקוח</button>
+      </div>
+      <div class="card" id="clientsContainer"><div class="empty-state">אין לקוחות עדיין</div></div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div class="page" id="page-settings">
+      <div class="section-title" style="margin-bottom:14px">הגדרות</div>
+      <div class="card">
+        <div class="field-group"><div class="field-label">שם העסק</div><input class="field-input" id="bizName" placeholder="שם העסק שלך" /></div>
+        <div class="field-group"><div class="field-label">מע"מ (%)</div><input class="field-input" id="vatRate" type="number" value="18" /></div>
+        <div class="field-group"><div class="field-label">Telegram Bot Token</div><input class="field-input" id="tgToken" placeholder="8666...:AAF..." style="direction:ltr" /></div>
+        <div class="field-group"><div class="field-label">Telegram Chat ID</div><input class="field-input" id="tgChat" placeholder="1234567890" style="direction:ltr" /></div>
+        <button class="btn btn-primary" onclick="saveSettings()">שמור הגדרות</button>
+      </div>
+      <div class="card" style="margin-top:0">
+        <button class="btn btn-danger" onclick="if(confirm('למחוק את כל הנתונים?')) clearAll()">מחק את כל הנתונים</button>
+      </div>
+    </div>
+  </div>
+
+  <nav class="nav">
+    <div class="nav-item active" onclick="navigate('home',this)"><span class="nav-icon">⏱</span>עבודה</div>
+    <div class="nav-item" onclick="navigate('clients',this)"><span class="nav-icon">👥</span>לקוחות</div>
+    <div class="nav-item" onclick="navigate('settings',this)"><span class="nav-icon">⚙️</span>הגדרות</div>
+  </nav>
+
+  <!-- START SHEET -->
+  <div class="overlay" id="startSheet">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">התחל עבודה</div>
+      <div class="field-group"><div class="field-label">תאריך</div><input class="field-input" type="date" id="workDate" /></div>
+      <div class="field-group"><div class="field-label">לקוח</div><select class="field-input" id="clientSelect"></select></div>
+      <div class="field-group"><div class="field-label">תיאור עבודה (אופציונלי)</div><textarea class="field-input" id="workDesc" placeholder="תאר את העבודה בחופשיות..."></textarea></div>
+      <button class="btn btn-primary" onclick="startWork()">צא לדרך ▶</button>
+      <button class="btn btn-secondary" onclick="closeSheet('startSheet')">ביטול</button>
+    </div>
+  </div>
+
+  <!-- END SHEET -->
+  <div class="overlay" id="endSheet">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">סיכום עבודה</div>
+      <div id="endSummary"></div>
+      <div class="field-group"><div class="field-label">מחיר לפני מע"מ (₪)</div><input class="field-input" type="number" id="workPrice" placeholder="0.00" oninput="updateTotal()" /></div>
+      <div class="price-breakdown">
+        <div class="price-row"><span class="price-label">לפני מע"מ</span><span class="price-val" id="preVatDisplay">0.00 ₪</span></div>
+        <div class="price-row"><span class="price-label" id="vatLabel">מע"מ 18%</span><span class="price-val" id="vatAmountDisplay">0.00 ₪</span></div>
+        <div class="price-row total-row"><span class="price-label">אחרי מע"מ</span><span class="price-val orange" id="totalDisplay">0.00 ₪</span></div>
+      </div>
+      <button class="btn btn-primary" onclick="finishWork()">שלח דיווח ✓</button>
+      <button class="btn btn-secondary" onclick="closeSheet('endSheet')">המשך עבודה</button>
+    </div>
+  </div>
+
+  <!-- ADD CLIENT SHEET -->
+  <div class="overlay" id="addClientSheet">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-title">לקוח חדש</div>
+      <div class="field-group"><div class="field-label">שם הלקוח</div><input class="field-input" id="newClientName" placeholder="שם הלקוח" /></div>
+      <div class="field-group"><div class="field-label">טלפון (אופציונלי)</div><input class="field-input" id="newClientPhone" placeholder="050-0000000" type="tel" /></div>
+      <button class="btn btn-primary" onclick="addClient()">הוסף לקוח</button>
+      <button class="btn btn-secondary" onclick="closeSheet('addClientSheet')">ביטול</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  let state = { clients: [], history: [], settings: {}, timer: null, startTime: null, activeClient: '', activeDesc: '', activeDate: '' };
+  let calYear, calMonth, calSelected = null;
+  const HE_MONTHS = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+  const HE_DAYS = ['א','ב','ג','ד','ה','ו','ש'];
+
+  function load() {
+    try {
+      state.clients = JSON.parse(localStorage.getItem('si_clients') || '[]');
+      state.history = JSON.parse(localStorage.getItem('si_history') || '[]');
+      state.settings = JSON.parse(localStorage.getItem('si_settings') || '{}');
+    } catch(e) {}
+    const now = new Date();
+    calYear = now.getFullYear(); calMonth = now.getMonth();
+    applySettings(); refreshClients(); renderCalendar();
+  }
+
+  function save() {
+    localStorage.setItem('si_clients', JSON.stringify(state.clients));
+    localStorage.setItem('si_history', JSON.stringify(state.history));
+    localStorage.setItem('si_settings', JSON.stringify(state.settings));
+  }
+
+  function applySettings() {
+    document.getElementById('bizName').value = state.settings.bizName || 'SmartInvoice';
+    document.getElementById('vatRate').value = state.settings.vatRate || '18';
+    document.getElementById('tgToken').value = state.settings.tgToken || '';
+    document.getElementById('tgChat').value = state.settings.tgChat || '';
+    document.getElementById('headerTitle').textContent = state.settings.bizName || 'SmartInvoice';
+  }
+
+  function saveSettings() {
+    state.settings.bizName = document.getElementById('bizName').value || 'SmartInvoice';
+    state.settings.vatRate = document.getElementById('vatRate').value || '18';
+    state.settings.tgToken = document.getElementById('tgToken').value;
+    state.settings.tgChat = document.getElementById('tgChat').value;
+    save(); applySettings(); alert('הגדרות נשמרו!');
+  }
+
+  function navigate(page, el) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.getElementById('page-' + page).classList.add('active');
+    if (el) el.classList.add('active');
+  }
+
+  function openStartSheet() {
+    const sel = document.getElementById('clientSelect');
+    sel.innerHTML = '<option value="">-- בחר לקוח --</option>';
+    state.clients.forEach(c => sel.innerHTML += `<option value="${c.name}">${c.name}</option>`);
+    document.getElementById('workDate').valueAsDate = new Date();
+    document.getElementById('workDesc').value = '';
+    document.getElementById('startSheet').classList.add('open');
+  }
+
+  function closeSheet(id) { document.getElementById(id).classList.remove('open'); }
+
+  function startWork() {
+    const client = document.getElementById('clientSelect').value;
+    if (!client) { alert('בחר לקוח'); return; }
+    state.activeClient = client;
+    state.activeDesc = document.getElementById('workDesc').value;
+    state.activeDate = document.getElementById('workDate').value;
+    state.startTime = new Date();
+    closeSheet('startSheet');
+    document.getElementById('startBtn').style.display = 'none';
+    document.getElementById('stopBtn').style.display = 'block';
+    const shortDesc = state.activeDesc.length > 40 ? state.activeDesc.substr(0,40) + '…' : state.activeDesc;
+    document.getElementById('activeClientDisplay').textContent = client + (shortDesc ? ' – ' + shortDesc : '');
+    document.getElementById('timerDisplay').classList.add('running');
+    state.timer = setInterval(() => {
+      const diff = new Date(new Date() - state.startTime);
+      document.getElementById('timerDisplay').textContent = diff.toISOString().substr(11, 8);
+    }, 1000);
+  }
+
+  function openEndSheet() {
+    const vatPct = parseFloat(state.settings.vatRate || 18);
+    document.getElementById('workPrice').value = '';
+    document.getElementById('vatLabel').textContent = 'מע"מ ' + vatPct + '%';
+    document.getElementById('preVatDisplay').textContent = '0.00 ₪';
+    document.getElementById('vatAmountDisplay').textContent = '0.00 ₪';
+    document.getElementById('totalDisplay').textContent = '0.00 ₪';
+    const dur = document.getElementById('timerDisplay').textContent;
+    const elapsed = state.startTime ? ((new Date() - state.startTime) / 3600000).toFixed(2) : 0;
+    document.getElementById('endSummary').innerHTML = `
+      <div class="card" style="margin-bottom:12px;padding:10px 12px">
+        <div class="summary-row"><span style="color:#64748b">לקוח</span><span style="font-weight:600">${esc(state.activeClient)}</span></div>
+        <div class="summary-row"><span style="color:#64748b">זמן</span><span>${dur} (${elapsed} שע')</span></div>
+        ${state.activeDesc ? `<div style="border-top:1px solid #f1f5f9;margin-top:4px;padding-top:6px"><div style="font-size:11px;color:#64748b;margin-bottom:3px">תיאור</div><div class="summary-desc">${esc(state.activeDesc)}</div></div>` : ''}
+      </div>`;
+    document.getElementById('endSheet').classList.add('open');
+  }
+
+  function updateTotal() {
+    const price = parseFloat(document.getElementById('workPrice').value) || 0;
+    const vatPct = parseFloat(state.settings.vatRate || 18);
+    const vatAmount = price * vatPct / 100;
+    const total = price + vatAmount;
+    document.getElementById('preVatDisplay').textContent = price.toFixed(2) + ' ₪';
+    document.getElementById('vatAmountDisplay').textContent = vatAmount.toFixed(2) + ' ₪';
+    document.getElementById('totalDisplay').textContent = total.toFixed(2) + ' ₪';
+  }
+
+  function finishWork() {
+    const price = parseFloat(document.getElementById('workPrice').value) || 0;
+    const vatPct = parseFloat(state.settings.vatRate || 18);
+    const vatAmount = price * vatPct / 100;
+    const total = price + vatAmount;
+    const dur = document.getElementById('timerDisplay').textContent;
+    const entry = {
+      id: Date.now(),
+      client: state.activeClient,
+      desc: state.activeDesc,
+      date: state.activeDate,
+      duration: dur,
+      price: price.toFixed(2),
+      vatAmount: vatAmount.toFixed(2),
+      total: total.toFixed(2),
+      vat: vatPct
+    };
+    state.history.unshift(entry);
+    save();
+    clearInterval(state.timer); state.timer = null; state.startTime = null;
+    document.getElementById('timerDisplay').textContent = '00:00:00';
+    document.getElementById('timerDisplay').classList.remove('running');
+    document.getElementById('activeClientDisplay').textContent = 'מוכן לעבודה';
+    document.getElementById('startBtn').style.display = 'block';
+    document.getElementById('stopBtn').style.display = 'none';
+    closeSheet('endSheet');
+    renderCalendar();
+    sendTelegram(entry);
+    alert('דווח בהצלחה! ✓');
+  }
+
+  function deleteEntry(id) {
+    if (!confirm('למחוק רשומה זו?')) return;
+    state.history = state.history.filter(h => h.id !== id);
+    save(); renderCalendar();
+  }
+
+  function sendTelegram(entry) {
+    const token = state.settings.tgToken, chat = state.settings.tgChat;
+    if (!token || !chat) return;
+    const bizName = state.settings.bizName || 'SmartInvoice';
+    const msg =
+`✅ דיווח עבודה חדש — ${bizName}
+━━━━━━━━━━━━━━
+👤 לקוח: ${entry.client}
+📅 תאריך: ${entry.date}
+⏱ זמן עבודה: ${entry.duration}
+${entry.desc ? '📋 תיאור: ' + entry.desc + '\n' : ''}━━━━━━━━━━━━━━
+💵 לפני מע"מ:   ${entry.price} ₪
+🧾 מע"מ ${entry.vat}%:      ${entry.vatAmount} ₪
+💰 אחרי מע"מ:   ${entry.total} ₪
+━━━━━━━━━━━━━━`;
+    fetch(`https://api.telegram.org/bot${token}/sendMessage?chat_id=${chat}&text=${encodeURIComponent(msg)}`).catch(()=>{});
+  }
+
+  function openAddClientSheet() {
+    document.getElementById('newClientName').value = '';
+    document.getElementById('newClientPhone').value = '';
+    document.getElementById('addClientSheet').classList.add('open');
+  }
+
+  function addClient() {
+    const name = document.getElementById('newClientName').value.trim();
+    if (!name) { alert('הכנס שם לקוח'); return; }
+    state.clients.push({ id: Date.now(), name, phone: document.getElementById('newClientPhone').value.trim() });
+    save(); refreshClients(); closeSheet('addClientSheet');
+  }
+
+  function deleteClient(id) {
+    if (!confirm('למחוק לקוח?')) return;
+    state.clients = state.clients.filter(c => c.id !== id);
+    save(); refreshClients();
+  }
+
+  function refreshClients() {
+    const el = document.getElementById('clientsContainer');
+    if (!state.clients.length) { el.innerHTML = '<div class="empty-state">אין לקוחות עדיין</div>'; return; }
+    el.innerHTML = state.clients.map(c => `
+      <div class="client-row">
+        <div><div class="client-name">${esc(c.name)}</div>${c.phone ? `<div class="client-meta">${esc(c.phone)}</div>` : ''}</div>
+        <button class="del-btn" onclick="deleteClient(${c.id})">✕</button>
+      </div>`).join('');
+  }
+
+  function calPrev() { calMonth--; if (calMonth < 0) { calMonth = 11; calYear--; } calSelected = null; renderCalendar(); }
+  function calNext() { calMonth++; if (calMonth > 11) { calMonth = 0; calYear++; } calSelected = null; renderCalendar(); }
+
+  function workDaysInMonth() {
+    const map = {};
+    state.history.forEach(h => {
+      if (!h.date) return;
+      const [y, m] = h.date.split('-').map(Number);
+      if (y === calYear && m - 1 === calMonth) {
+        if (!map[h.date]) map[h.date] = [];
+        map[h.date].push(h);
+      }
+    });
+    return map;
+  }
+
+  function renderCalendar() {
+    document.getElementById('calMonthLabel').textContent = HE_MONTHS[calMonth] + ' ' + calYear;
+    document.getElementById('calDayNames').innerHTML = HE_DAYS.map(d => `<div class="cal-day-name">${d}</div>`).join('');
+    const workMap = workDaysInMonth();
+    const firstDay = new Date(calYear, calMonth, 1).getDay();
+    const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+    const today = new Date();
+    const todayKey = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+    let html = '';
+    for (let i = 0; i < firstDay; i++) html += `<div class="cal-day empty"></div>`;
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dateKey = calYear + '-' + String(calMonth+1).padStart(2,'0') + '-' + String(d).padStart(2,'0');
+      const hasWork = !!workMap[dateKey];
+      const cls = ['cal-day', hasWork?'has-work':'', dateKey===todayKey?'today':'', dateKey===calSelected?'selected':''].filter(Boolean).join(' ');
+      html += `<div class="${cls}" onclick="selectCalDay('${dateKey}')">${d}${hasWork?'<div class="cal-dot"></div>':''}</div>`;
+    }
+    document.getElementById('calGrid').innerHTML = html;
+    renderCalDetail(workMap);
+  }
+
+  function selectCalDay(dateKey) {
+    calSelected = calSelected === dateKey ? null : dateKey;
+    renderCalendar();
+  }
+
+  function renderCalDetail(workMap) {
+    const el = document.getElementById('calDetail');
+    if (!calSelected || !workMap[calSelected]) { el.innerHTML = ''; return; }
+    const entries = workMap[calSelected];
+    const totalBefore = entries.reduce((s,e) => s + parseFloat(e.price||0), 0);
+    const totalAfter  = entries.reduce((s,e) => s + parseFloat(e.total||0), 0);
+    el.innerHTML =
+      `<div style="font-size:12px;font-weight:700;color:#64748b;margin-bottom:6px;padding-top:10px;border-top:1px solid #f1f5f9">${calSelected}</div>` +
+      entries.map(e => `
+        <div class="cal-detail-entry">
+          <div class="cal-detail-top">
+            <div style="flex:1;min-width:0">
+              <div class="cal-detail-client">${esc(e.client)}</div>
+              <div class="cal-detail-meta">${e.duration}</div>
+            </div>
+            <div class="cal-detail-prices">
+              <span class="cal-price-after">${e.total} ₪</span>
+              <span class="cal-price-before">לפני מע"מ: ${e.price} ₪</span>
+            </div>
+            <button class="cal-detail-del" onclick="deleteEntry(${e.id})">✕</button>
+          </div>
+          ${e.desc ? `<div class="cal-detail-desc">${esc(e.desc)}</div>` : ''}
+        </div>`).join('') +
+      (entries.length > 1 ? `
+        <div class="cal-total-row">
+          <span>סה"כ יום</span>
+          <div class="cal-total-prices">
+            <span class="cal-total-after">${totalAfter.toFixed(2)} ₪</span>
+            <span class="cal-total-before">לפני מע"מ: ${totalBefore.toFixed(2)} ₪</span>
+          </div>
+        </div>` : '');
+  }
+
+  function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  function clearAll() {
+    localStorage.removeItem('si_clients');
+    localStorage.removeItem('si_history');
+    localStorage.removeItem('si_settings');
+    location.reload();
+  }
+
+  load();
+</script>
+</body>
+</html>
